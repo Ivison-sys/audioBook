@@ -33,7 +33,7 @@ CHUNK_SIZE  = 3000
 # ──────────────────────────────────────────────
 # EXTRAÇÃO DO PDF — anuncia página, suporta 2 colunas
 # ──────────────────────────────────────────────
-def extrair_texto_pagina(page, num_pagina: int, anunciar_pagina: bool) -> str:
+def extrair_texto_pagina(page, num_pagina: int, anunciar_pagina: bool, offset_pagina: int) -> str:
     """
     Extrai o texto da página com detecção automática de 1 ou 2 colunas.
     Prefixa o conteúdo com "Página N." para orientar o ouvinte.
@@ -66,11 +66,11 @@ def extrair_texto_pagina(page, num_pagina: int, anunciar_pagina: bool) -> str:
         return ""
 
     # Prefixa com anúncio de página
-    prefixo = f"Página {num_pagina}.\n" if anunciar_pagina else ""
+    prefixo = f"Página {num_pagina + offset_pagina - 1}.\n" if anunciar_pagina else ""
     return prefixo + texto
 
 
-def extrair_texto_pdf(pdf_path: str, anunciar_pagina: bool) -> str:
+def extrair_texto_pdf(pdf_path: str, anunciar_pagina: bool, offset_pagina: int = 0) -> str:
     partes = []
     with pdfplumber.open(pdf_path) as pdf:
         total = len(pdf.pages)
@@ -78,7 +78,7 @@ def extrair_texto_pdf(pdf_path: str, anunciar_pagina: bool) -> str:
 
         for i, page in enumerate(pdf.pages, 1):
             try:
-                texto = extrair_texto_pagina(page, i, anunciar_pagina)
+                texto = extrair_texto_pagina(page, i, anunciar_pagina, offset_pagina)
                 if texto.strip():
                     partes.append(texto)
                 else:
@@ -167,10 +167,11 @@ async def gerar_audiobook(
     pdf_path: str,
     mp3_saida: str = "audiobook_completo.mp3",
     voz: str = VOZ_PADRAO,
+    offset_pagina: int = 1,
     anunciar_pagina: bool = True,
 ):
     print("\n📄 Extraindo texto do PDF...")
-    texto_bruto = extrair_texto_pdf(pdf_path, anunciar_pagina)
+    texto_bruto = extrair_texto_pdf(pdf_path, anunciar_pagina, offset_pagina)
     texto = limpar_texto(texto_bruto)
 
     if not texto:
@@ -186,7 +187,7 @@ async def gerar_audiobook(
     print(f"📢 Anúncio de página: {'sim' if anunciar_pagina else 'não'}")
     print(f"💾 Saída: {mp3_saida}\n")
 
-    await sintetizar_para_arquivo(chunks, mp3_saida, voz)
+    await sintetizar_para_arquivo(chunks, mp3_saida, voz,)
 
     if os.path.exists(mp3_saida) and os.path.getsize(mp3_saida) > 0:
         tamanho_mb = os.path.getsize(mp3_saida) / (1024 * 1024)
@@ -204,6 +205,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("pdf", help="Caminho para o arquivo PDF")
     parser.add_argument("--saida", default="audiobook_completo.mp3", help="Nome do MP3 de saída")
+    parser.add_argument("--offset", type=int, default=1, help="Número da página para começar (padrão: 1)")
     parser.add_argument(
         "--voz",
         default=VOZ_PADRAO,
@@ -230,5 +232,6 @@ if __name__ == "__main__":
         args.pdf,
         args.saida,
         args.voz,
+        args.offset,
         anunciar_pagina=not args.sem_pagina,
     ))
